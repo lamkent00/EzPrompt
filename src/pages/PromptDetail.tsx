@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Star, Copy, Play, GitFork, ChevronLeft, MessageSquare, Lock, CreditCard } from 'lucide-react';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom'; // Thêm useLocation
+import { Star, Copy, Play, GitFork, ChevronLeft, MessageSquare, Lock, ShoppingCart } from 'lucide-react';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { promptService, Comment } from '../services/promptService';
@@ -50,12 +50,14 @@ interface Prompt {
 export default function PromptDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation(); // Thêm để kiểm tra state từ CreatePrompt
   const [prompt, setPrompt] = useState<Prompt | null>(null);
   const [language, setLanguage] = useState<'vi' | 'en'>('vi');
   const [newComment, setNewComment] = useState('');
   const [userRating, setUserRating] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPurchasing, setIsPurchasing] = useState(false);
   const [hasPurchased, setHasPurchased] = useState(false);
 
   useEffect(() => {
@@ -64,6 +66,14 @@ export default function PromptDetail() {
       checkPurchaseStatus();
     }
   }, [id]);
+
+  // Thêm useEffect để reload khi quay lại từ CreatePrompt
+  useEffect(() => {
+    const fromFork = (location.state as { fromFork?: boolean })?.fromFork;
+    if (fromFork && id) {
+      loadPrompt(); // Tải lại dữ liệu khi quay lại từ fork thành công
+    }
+  }, [location.state, id]);
 
   const loadPrompt = async () => {
     try {
@@ -84,7 +94,7 @@ export default function PromptDetail() {
       if (!user) return;
 
       const { data } = await supabase
-        .from('prompt_purchases')
+        .from('purchased_prompts')
         .select('id')
         .eq('user_id', user.id)
         .eq('prompt_id', id)
@@ -100,6 +110,9 @@ export default function PromptDetail() {
     if (!prompt) return;
 
     try {
+      setIsPurchasing(true);
+
+      // Check authentication
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         toast.error('Vui lòng đăng nhập để mua prompt');
@@ -107,25 +120,39 @@ export default function PromptDetail() {
         return;
       }
 
-      // Here you would integrate with a payment provider
-      // For demo purposes, we'll just simulate a successful purchase
-      const { error } = await supabase
-        .from('prompt_purchases')
-        .insert([
-          {
-            user_id: user.id,
-            prompt_id: prompt.id,
-            amount: prompt.settings.price
-          }
-        ]);
+      // Get user's points
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('points')
+        .eq('id', user.id)
+        .single();
 
-      if (error) throw error;
+      if (userError) throw userError;
+
+      // Check if user has enough points
+      if (userData.points < prompt.settings.price) {
+        toast.error('Số điểm không đủ để mua prompt này');
+        return;
+      }
+
+      // Purchase the prompt using the database function
+      const { data: success, error: purchaseError } = await supabase
+        .rpc('purchase_prompt', {
+          prompt_id: prompt.id,
+          amount: prompt.settings.price
+        });
+
+      if (purchaseError || !success) {
+        throw new Error('Không thể mua prompt. Vui lòng thử lại sau.');
+      }
 
       setHasPurchased(true);
       toast.success('Mua prompt thành công!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error purchasing prompt:', error);
-      toast.error('Không thể mua prompt. Vui lòng thử lại sau.');
+      toast.error(error.message || 'Không thể mua prompt. Vui lòng thử lại sau.');
+    } finally {
+      setIsPurchasing(false);
     }
   };
 
@@ -176,7 +203,8 @@ export default function PromptDetail() {
               isPublic: true,
               allowComments: true,
               price: 0
-            }
+            },
+            originalPromptId: prompt.id // Thêm originalPromptId để xác định fork
           }
         }
       });
@@ -256,10 +284,11 @@ export default function PromptDetail() {
           </p>
           <button
             onClick={handlePurchase}
-            className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+            disabled={isPurchasing}
+            className="inline-flex items-center px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-md transition-colors"
           >
-            <CreditCard className="h-5 w-5 mr-2" />
-            Mua với giá {prompt?.settings.price.toLocaleString()} VND
+            <ShoppingCart className="h-5 w-5 mr-2" />
+            {isPurchasing ? 'Đang xử lý...' : `Mua với giá ${prompt?.settings.price.toLocaleString()} điểm`}
           </button>
         </div>
       </div>
