@@ -45,38 +45,146 @@ export interface Comment {
 }
 
 export const promptService = {
+  // async createPrompt(data: CreatePromptData) {
+  //   try {
+  //     // Get the current user
+  //     const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+  //     if (userError || !user) {
+  //       throw new Error('User not authenticated');
+  //     }
+
+  //     // Validate required fields
+  //     if (!data.title || !data.content.en) {
+  //       throw new Error('Title and English content are required');
+  //     }
+
+  //     // If this is a fork, verify the original prompt exists and is forkable
+  //     if (data.originalPromptId) {
+  //       const { data: originalPrompt, error: originalError } = await supabase
+  //         .from('prompts')
+  //         .select('settings')
+  //         .eq('id', data.originalPromptId)
+  //         .single();
+
+  //       if (originalError || !originalPrompt) {
+  //         throw new Error('Original prompt not found');
+  //       }
+
+  //       if (!originalPrompt.settings.allowFork) {
+  //         throw new Error('This prompt does not allow forking');
+  //       }
+  //     }
+
+  //     // First, insert the prompt
+  //     const { data: prompt, error: promptError } = await supabase
+  //       .from('prompts')
+  //       .insert([
+  //         {
+  //           title: data.title,
+  //           description: data.description,
+  //           content: data.content,
+  //           explanation: data.explanation,
+  //           author_id: user.id,
+  //           author_username: user.user_metadata?.username || user.email,
+  //           ai_tool: data.aiTool,
+  //           purpose: data.purpose,
+  //           original_prompt_id: data.originalPromptId,
+  //           stats: { 
+  //             views: 0, 
+  //             usage: 0,
+  //             likes: 0,
+  //             comments: 0,
+  //             forks: 0,
+  //             avg_rating: 0,
+  //             ratings_count: 0,
+  //             fork_count: 0
+  //           },
+  //           settings: {
+  //             allowFork: data.settings.allowFork,
+  //             isPublic: data.settings.isPublic,
+  //             allowComments: data.settings.allowComments,
+  //             price: data.settings.price
+  //           }
+  //         }
+  //       ])
+  //       .select()
+  //       .single();
+
+  //     if (promptError) {
+  //       throw promptError;
+  //     }
+
+  //     // Then, insert tags if any exist
+  //     if (data.tags.length > 0) {
+  //       const tagInserts = data.tags.map(tag => ({
+  //         prompt_id: prompt.id,
+  //         tag: tag.toLowerCase().trim()
+  //       }));
+
+  //       const { error: tagsError } = await supabase
+  //         .from('prompt_tags')
+  //         .insert(tagInserts);
+
+  //       if (tagsError) {
+  //         console.error('Error inserting tags:', tagsError);
+  //       }
+  //     }
+
+  //     // Create an activity record
+  //     const activityType = data.originalPromptId ? 'fork_prompt' : 'create_prompt';
+  //     const { error: activityError } = await supabase
+  //       .from('activities')
+  //       .insert([
+  //         {
+  //           user_id: user.id,
+  //           type: activityType,
+  //           target_id: prompt.id,
+  //           target_type: 'prompt',
+  //           metadata: {
+  //             prompt_title: prompt.title,
+  //             original_prompt_id: data.originalPromptId
+  //           }
+  //         }
+  //       ]);
+
+  //     if (activityError) {
+  //       console.error('Error creating activity:', activityError);
+  //     }
+
+  //     return prompt;
+  //   } catch (error) {
+  //     console.error('Error creating prompt:', error);
+  //     throw error;
+  //   }
+  // },
   async createPrompt(data: CreatePromptData) {
     try {
-      // Get the current user
       const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
       if (userError || !user) {
         throw new Error('User not authenticated');
       }
-
-      // Validate required fields
+  
       if (!data.title || !data.content.en) {
         throw new Error('Title and English content are required');
       }
-
-      // If this is a fork, verify the original prompt exists and is forkable
+  
       if (data.originalPromptId) {
         const { data: originalPrompt, error: originalError } = await supabase
           .from('prompts')
-          .select('settings')
+          .select('settings, stats')
           .eq('id', data.originalPromptId)
           .single();
-
+  
         if (originalError || !originalPrompt) {
           throw new Error('Original prompt not found');
         }
-
+  
         if (!originalPrompt.settings.allowFork) {
           throw new Error('This prompt does not allow forking');
         }
       }
-
-      // First, insert the prompt
+  
       const { data: prompt, error: promptError } = await supabase
         .from('prompts')
         .insert([
@@ -110,28 +218,53 @@ export const promptService = {
         ])
         .select()
         .single();
-
+  
       if (promptError) {
         throw promptError;
       }
-
-      // Then, insert tags if any exist
+  
       if (data.tags.length > 0) {
         const tagInserts = data.tags.map(tag => ({
           prompt_id: prompt.id,
           tag: tag.toLowerCase().trim()
         }));
-
         const { error: tagsError } = await supabase
           .from('prompt_tags')
           .insert(tagInserts);
-
         if (tagsError) {
           console.error('Error inserting tags:', tagsError);
         }
       }
-
-      // Create an activity record
+  
+      // Cập nhật fork_count của prompt gốc
+      if (data.originalPromptId) {
+        const { data: originalPrompt, error: fetchError } = await supabase
+          .from('prompts')
+          .select('stats')
+          .eq('id', data.originalPromptId)
+          .single();
+  
+        if (fetchError || !originalPrompt) {
+          console.error('Error fetching original prompt stats:', fetchError);
+        } else {
+          const updatedForkCount = (originalPrompt.stats.fork_count || 0) + 1;
+          const { error: updateError } = await supabase
+            .from('prompts')
+            .update({
+              stats: {
+                ...originalPrompt.stats,
+                fork_count: updatedForkCount
+              }
+            })
+            .eq('id', data.originalPromptId);
+  
+          if (updateError) {
+            console.error('Error updating fork count:', updateError);
+            throw updateError; // Ném lỗi để phát hiện nếu cập nhật thất bại
+          }
+        }
+      }
+  
       const activityType = data.originalPromptId ? 'fork_prompt' : 'create_prompt';
       const { error: activityError } = await supabase
         .from('activities')
@@ -147,18 +280,18 @@ export const promptService = {
             }
           }
         ]);
-
+  
       if (activityError) {
         console.error('Error creating activity:', activityError);
       }
-
+  
       return prompt;
     } catch (error) {
       console.error('Error creating prompt:', error);
       throw error;
     }
   },
-
+  
   async getPrompts(filters: PromptFilters, pagination: PaginationParams) {
     try {
       // let query = supabase

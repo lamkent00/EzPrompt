@@ -45,7 +45,7 @@ export function CreatePrompt() {
     if (location.state?.forkedPrompt) {
       setForm({
         ...location.state.forkedPrompt,
-        originalPromptId: location.state.forkedPrompt.id
+        originalPromptId: location.state.forkedPrompt.originalPromptId
       });
     } else {
       // Load draft if exists and no forked data
@@ -124,8 +124,17 @@ export function CreatePrompt() {
         // Show success message
         toast.success(form.originalPromptId ? 'Đã fork prompt thành công!' : 'Đã đăng tải prompt thành công!');
 
-        // Navigate to the new prompt
-        navigate(`/prompt/${prompt.id}`);
+        // // Navigate to the new prompt
+        // navigate(`/prompt/${prompt.id}`);
+
+        // Chuyển hướng về PromptDetail với state từ fork
+        if (form.originalPromptId) {
+          navigate(`/prompt/${form.originalPromptId}`, {
+            state: { fromFork: true } // Thông báo rằng vừa fork thành công
+          });
+        } else {
+          navigate(`/prompt/${prompt.id}`);
+        }
       }
     } catch (error) {
       console.error('Error:', error);
