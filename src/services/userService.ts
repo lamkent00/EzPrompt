@@ -166,11 +166,11 @@ export const userService = {
         .select(`
           *,
           prompt_tags (tag),
-          original_prompt:prompts!prompts_original_prompt_id_fkey (
+          original_prompt:prompts (
             id,
             title,
             author_id,
-            author:users!prompts_author_id_fkey (
+            author:users (
               username
             )
           )

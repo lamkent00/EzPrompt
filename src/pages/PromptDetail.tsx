@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link, useLocation } from 'react-router-dom'; // Thêm useLocation
-import { Star, Copy, Play, GitFork, ChevronLeft, MessageSquare, Lock, ShoppingCart } from 'lucide-react';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
+import { Star, Copy, Play, GitFork, ChevronLeft, MessageSquare, Lock, ShoppingCart, Edit } from 'lucide-react';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { promptService, Comment } from '../services/promptService';
@@ -50,7 +50,7 @@ interface Prompt {
 export default function PromptDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const location = useLocation(); // Thêm để kiểm tra state từ CreatePrompt
+  const location = useLocation();
   const [prompt, setPrompt] = useState<Prompt | null>(null);
   const [language, setLanguage] = useState<'vi' | 'en'>('vi');
   const [newComment, setNewComment] = useState('');
@@ -59,19 +59,20 @@ export default function PromptDetail() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [hasPurchased, setHasPurchased] = useState(false);
+  const [isAuthor, setIsAuthor] = useState(false);
 
   useEffect(() => {
     if (id) {
       loadPrompt();
       checkPurchaseStatus();
+      checkAuthorStatus();
     }
   }, [id]);
 
-  // Thêm useEffect để reload khi quay lại từ CreatePrompt
   useEffect(() => {
     const fromFork = (location.state as { fromFork?: boolean })?.fromFork;
     if (fromFork && id) {
-      loadPrompt(); // Tải lại dữ liệu khi quay lại từ fork thành công
+      loadPrompt();
     }
   }, [location.state, id]);
 
@@ -98,11 +99,32 @@ export default function PromptDetail() {
         .select('id')
         .eq('user_id', user.id)
         .eq('prompt_id', id)
-        .single();
+        .maybeSingle();
 
       setHasPurchased(!!data);
     } catch (error) {
       console.error('Error checking purchase status:', error);
+    }
+  };
+
+  const checkAuthorStatus = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setIsAuthor(false);
+        return;
+      }
+
+      const { data: promptData } = await supabase
+        .from('prompts')
+        .select('author_id')
+        .eq('id', id)
+        .single();
+
+      setIsAuthor(promptData?.author_id === user.id);
+    } catch (error) {
+      console.error('Error checking author status:', error);
+      setIsAuthor(false);
     }
   };
 
@@ -112,7 +134,6 @@ export default function PromptDetail() {
     try {
       setIsPurchasing(true);
 
-      // Check authentication
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         toast.error('Vui lòng đăng nhập để mua prompt');
@@ -120,7 +141,6 @@ export default function PromptDetail() {
         return;
       }
 
-      // Get user's points
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select('points')
@@ -129,13 +149,11 @@ export default function PromptDetail() {
 
       if (userError) throw userError;
 
-      // Check if user has enough points
       if (userData.points < prompt.settings.price) {
         toast.error('Số điểm không đủ để mua prompt này');
         return;
       }
 
-      // Purchase the prompt using the database function
       const { data: success, error: purchaseError } = await supabase
         .rpc('purchase_prompt', {
           prompt_id: prompt.id,
@@ -173,7 +191,6 @@ export default function PromptDetail() {
     if (!prompt) return;
 
     try {
-      // Check authentication
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         toast.error('Vui lòng đăng nhập để thực hiện fork');
@@ -181,13 +198,11 @@ export default function PromptDetail() {
         return;
       }
 
-      // Check if prompt requires purchase
       if (prompt.settings.price > 0 && !hasPurchased) {
         toast.error('Vui lòng mua prompt để thực hiện fork');
         return;
       }
 
-      // Navigate to create prompt page with forked data
       navigate('/create-prompt', {
         state: {
           forkedPrompt: {
@@ -204,7 +219,7 @@ export default function PromptDetail() {
               allowComments: true,
               price: 0
             },
-            originalPromptId: prompt.id // Thêm originalPromptId để xác định fork
+            originalPromptId: prompt.id
           }
         }
       });
@@ -222,7 +237,6 @@ export default function PromptDetail() {
     try {
       setIsSubmitting(true);
 
-      // Check authentication
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         toast.error('Vui lòng đăng nhập để bình luận');
@@ -230,7 +244,6 @@ export default function PromptDetail() {
         return;
       }
 
-      // Validate input
       if (!newComment.trim()) {
         toast.error('Vui lòng nhập nội dung bình luận');
         return;
@@ -241,14 +254,11 @@ export default function PromptDetail() {
         return;
       }
 
-      // Submit comment
       await promptService.addComment(prompt.id, newComment, userRating);
       
-      // Reset form
       setNewComment('');
       setUserRating(0);
       
-      // Reload prompt to get updated comments
       await loadPrompt();
       
       toast.success('Đã thêm bình luận thành công!');
@@ -292,7 +302,7 @@ export default function PromptDetail() {
           </button>
         </div>
       </div>
-      <div className="blur-sm">
+      <div>
         <div className="h-48 bg-gray-100 rounded-lg"></div>
       </div>
     </div>
@@ -342,9 +352,20 @@ export default function PromptDetail() {
         </button>
 
         <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">
-            {prompt.title}
-          </h1>
+          <div className="flex justify-between items-center mb-4">
+            <h1 className="text-3xl font-bold text-gray-900">
+              {prompt.title}
+            </h1>
+            {isAuthor && (
+              <Link
+                to={`/prompt/${id}/edit`}
+                className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+              >
+                <Edit className="h-5 w-5 mr-2" />
+                Chỉnh sửa
+              </Link>
+            )}
+          </div>
           
           <div className="flex flex-wrap gap-2 mb-4">
             <span className="px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-sm">
