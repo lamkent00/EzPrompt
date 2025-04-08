@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Wand2, GraduationCap } from 'lucide-react';
 
 export function Tools() {
@@ -10,7 +11,10 @@ export function Tools() {
         </h2>
         
         <div className="grid md:grid-cols-2 gap-8">
-          <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg shadow-lg overflow-hidden text-white">
+          <Link
+            to="/tools"
+            className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg shadow-lg overflow-hidden text-white transform hover:scale-105 transition-transform"
+          >
             <div className="px-6 py-8">
               <div className="flex items-center mb-4">
                 <Wand2 className="h-8 w-8 mr-3" />
@@ -19,13 +23,16 @@ export function Tools() {
               <p className="mb-6">
                 Công cụ giúp bạn phân tích và cải thiện prompt của bạn để đạt hiệu quả tốt nhất
               </p>
-              <button className="bg-white text-indigo-600 px-6 py-2 rounded-md font-medium hover:bg-indigo-50 transition-colors">
+              <span className="inline-block bg-white text-indigo-600 px-6 py-2 rounded-md font-medium hover:bg-indigo-50 transition-colors">
                 Sử dụng ngay
-              </button>
+              </span>
             </div>
-          </div>
+          </Link>
 
-          <div className="bg-gradient-to-br from-blue-500 to-teal-600 rounded-lg shadow-lg overflow-hidden text-white">
+          <Link
+            to="/guides"
+            className="bg-gradient-to-br from-blue-500 to-teal-600 rounded-lg shadow-lg overflow-hidden text-white transform hover:scale-105 transition-transform"
+          >
             <div className="px-6 py-8">
               <div className="flex items-center mb-4">
                 <GraduationCap className="h-8 w-8 mr-3" />
@@ -34,11 +41,11 @@ export function Tools() {
               <p className="mb-6">
                 Tìm hiểu cách sử dụng AI hiệu quả theo nghề nghiệp của bạn
               </p>
-              <button className="bg-white text-blue-600 px-6 py-2 rounded-md font-medium hover:bg-blue-50 transition-colors">
+              <span className="inline-block bg-white text-blue-600 px-6 py-2 rounded-md font-medium hover:bg-blue-50 transition-colors">
                 Khám phá
-              </button>
+              </span>
             </div>
-          </div>
+          </Link>
         </div>
       </div>
     </div>

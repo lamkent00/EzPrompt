@@ -45,7 +45,8 @@ export function CreatePrompt() {
     if (location.state?.forkedPrompt) {
       setForm({
         ...location.state.forkedPrompt,
-        originalPromptId: location.state.forkedPrompt.originalPromptId
+        originalPromptId: location.state.forkedPrompt.originalPromptId // Sửa thành originalPromptId
+        //originalPromptId: location.state.forkedPrompt.id
       });
     } else {
       // Load draft if exists and no forked data
